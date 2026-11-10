@@ -7,7 +7,18 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <script>window.__MOB=(matchMedia("(pointer:coarse)").matches||Math.min(screen.width,screen.height)<820);window.__AN=window.__MOB?4:16;</script>
+  <script>window.__MOB=(matchMedia("(pointer:coarse)").matches||Math.min(screen.width,screen.height)<820);window.__AN=window.__MOB?4:16;
+  /* ---- TURN (needed so phone<->browser challenges connect across different networks) ----
+     Paste your Metered credentials URL between the quotes, e.g.
+     'https://YOURAPP.metered.live/api/v1/turn/credentials?apiKey=YOURKEY'  (see steps from Claude) */
+  window.__TURN_API='';
+  window.__TURN=[];
+  /* Metered static credential: paste the PASSWORD between the quotes below */
+  window.__TURN_USER='ab545ca57929d2c0d233f02f';
+  window.__TURN_PASS='N/mOoEOHEb0y5mSZ';
+  if(window.__TURN_PASS){window.__TURN=[{urls:'stun:stun.relay.metered.ca:80'},{urls:'turn:global.relay.metered.ca:80',username:window.__TURN_USER,credential:window.__TURN_PASS},{urls:'turn:global.relay.metered.ca:80?transport=tcp',username:window.__TURN_USER,credential:window.__TURN_PASS},{urls:'turn:global.relay.metered.ca:443',username:window.__TURN_USER,credential:window.__TURN_PASS},{urls:'turns:global.relay.metered.ca:443?transport=tcp',username:window.__TURN_USER,credential:window.__TURN_PASS}]}
+  if(window.__TURN_API){fetch(window.__TURN_API).then(function(r){return r.json()}).then(function(l){if(Array.isArray(l))window.__TURN=l}).catch(function(){})}
+  window.__iceList=function(){return [{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}].concat(window.__TURN||[])};</script>
   <style id="rm-mobile-opt">html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%;background:#090604}body{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}input,textarea{-webkit-user-select:text;user-select:text}canvas{touch-action:none;display:block;outline:none}button,.glass-btn,.lb-btn,.hm-tab,[role=button],label{touch-action:manipulation}@media(pointer:coarse){button,.glass-btn,.lb-btn,.hm-tab{min-height:40px}input,select,textarea{font-size:16px}*{scrollbar-width:none}*::-webkit-scrollbar{display:none}}@media(max-width:640px){#page-head{padding-top:env(safe-area-inset-top)}}@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}</style>
   <title>ROOKMATE</title>
   <link rel="icon" type="image/png" href="./rookmate-rook.png">
@@ -4131,11 +4142,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
   const $ = (id) => document.getElementById(id);
   const O = window.ONLINE = { active: false, connected: false, color: 'w', role: null, code: null, peer: null, conn: null, opp: null };
 
-  const ICE = { iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
-  ] };
+  const ICE = { get iceServers() { return window.__iceList(); } };
 
   const P = Chess3DApp.prototype;
   const app = () => window.chessApp;
@@ -4476,8 +4483,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
   const $ = (id) => document.getElementById(id);
   const PFX = 'chess3d-u-';
   const AVATARS = ['knight','rook','bishop','queen','king','pawn'];
-  const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }] };
+  const ICE = { get iceServers() { return window.__iceList(); } };
   const NAME_RE = /^[a-z0-9_]{3,16}$/;
   /* OFFLINE MAILBOX (store-and-forward) for friend requests */
   const MAILBOX = 'https://rookmate-3cfe5-default-rtdb.firebaseio.com';
@@ -4771,7 +4777,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
       const id = pid(name); let done = false;
       const c = S.peer.connect(id, { reliable: true });
       const fin = (v) => { if (done) return; done = true; clearTimeout(t); delete S.dials[id]; res(v); };
-      const t = setTimeout(() => { S.lastError = 'No response from ' + name + ' after 7 seconds.'; setNet(); fin(null); try { c.close(); } catch (e) {} }, 7000);
+      const t = setTimeout(() => { S.lastError = 'No response from ' + name + ' after 12 seconds.'; setNet(); fin(null); try { c.close(); } catch (e) {} }, 12000);
       S.dials[id] = () => fin(null);
       c.on('open', () => fin(c));
       c.on('error', (e) => { S.lastError = (e.type || 'connection') + (e.message ? ': ' + e.message : ''); setNet(); fin(null); });
@@ -4781,7 +4787,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
   async function probe(name) {
     const c = await dial(name); if (!c) return false;
     return new Promise((res) => {
-      const t = setTimeout(() => { try { c.close(); } catch (e) {} res(false); }, 3500);
+      const t = setTimeout(() => { try { c.close(); } catch (e) {} res(false); }, 5000);
       c.on('data', (m) => { if (m && m.t === 'pong') { clearTimeout(t); setFriendAv(name, m.av); try { c.close(); } catch (e) {} res(true); } });
       c.send({ t: 'ping' });
     });
