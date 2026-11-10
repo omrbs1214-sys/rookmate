@@ -1,0 +1,8 @@
+{
+  "appId": "com.rookmate.chess",
+  "appName": "ROOKMATE",
+  "webDir": "www",
+  "backgroundColor": "#090604",
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https" }
+}
