@@ -4510,7 +4510,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
   }
   async function pollInbox() {
     if (!MAILBOX || !S.user || document.hidden) return;
-    if ((window.__pc = (window.__pc || 0) + 1) % 5 === 0) cloudPull();
+    if ((window.__pc = (window.__pc || 0) + 1) % 5 === 1) cloudPull();
     const user = S.user;
     try {
       const r = await fetch(MAILBOX + '/rm/inbox/' + user + '.json'); if (!r.ok) return;
@@ -4530,7 +4530,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
     const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms || 9000);
     try { return await fetch(url, Object.assign({ signal: ac.signal }, opts || {})); } finally { clearTimeout(t); }
   }
-  function normAcct(a) { a = a || {}; a.friends = a.friends || []; a.incoming = a.incoming || []; a.outgoing = a.outgoing || []; a.stats = a.stats || { w: 0, l: 0, d: 0 }; return a; }
+  function normAcct(a) { a = a || {}; a.friends = a.friends || []; a.incoming = a.incoming || []; a.outgoing = a.outgoing || []; a.stats = a.stats || { w: 0, l: 0, d: 0 }; a.synced = true; return a; }
   function keepAv(neu, old) {   // cloud copy has no big custom avatars of friends - keep the ones this device already knows
     if (!old) return neu;
     ['friends', 'incoming'].forEach((k) => (neu[k] || []).forEach((f) => { const o = (old[k] || []).find((x) => x.name === f.name); if (o && o.av && o.av.type === 'custom') f.av = o.av; }));
@@ -4546,14 +4546,26 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
     const a = DB[u]; a.updated = Date.now();
     const slim = (x) => (x && x.av && x.av.type === 'custom' ? Object.assign({}, x, { av: { type: 'character', id: 'knight' } }) : x);
     const copy = Object.assign({}, a, { friends: (a.friends || []).map(slim), incoming: (a.incoming || []).map(slim) });
-    try { const r = await fetchT(MAILBOX + '/rm/accounts/' + u + '.json', { method: 'PUT', body: JSON.stringify(copy) }); return r.ok; } catch (e) { return false; }
+    try { const r = await fetchT(MAILBOX + '/rm/accounts/' + u + '.json', { method: 'PUT', body: JSON.stringify(copy) }); if (r.ok) a.synced = true; return r.ok; } catch (e) { return false; }
   }
   function cloudPush() { if (!MAILBOX || !S.user) return; clearTimeout(pushTimer); pushTimer = setTimeout(() => doPush(), 1200); }
+  async function checkBan(u) { try { const r = await fetchT(MAILBOX + '/rm/bans/' + u + '.json', {}, 6000); if (!r.ok) return null; return await r.json(); } catch (e) { return null; } }
+  async function getConfig() { try { const r = await fetchT(MAILBOX + '/rm/config.json', {}, 6000); if (!r.ok) return {}; return (await r.json()) || {}; } catch (e) { return {}; } }
+  function kickOut(msg) { toast(msg, 'fa-ban', 7000); try { logout(); } catch (e) {} }
+  async function showAnnouncement() {
+    if (!MAILBOX) return; const c = await getConfig(); const an = c.announcement;
+    if (an && an.text) { const id = String(an.id || an.text); if (STORE.get('chess3d-ann') !== id) { STORE.set('chess3d-ann', id); toast(an.text, 'fa-bullhorn', 8000); } }
+  }
   async function cloudPull() {
-    if (!MAILBOX || !S.user || pushTimer) return; const u = S.user;
+    if (!MAILBOX || !S.user) return; const u = S.user;
     try {
+      const ban = await checkBan(u);
+      if (ban && S.user === u) { kickOut('Your account was banned' + (ban.reason ? ': ' + ban.reason : '')); return; }
       const t = await (await fetchT(MAILBOX + '/rm/accounts/' + u + '/updated.json')).json();
-      const a = DB[u]; if (typeof t !== 'number' || !a || t <= (a.updated || 0) || S.user !== u) return;
+      const a = DB[u];
+      if (t === null && a && a.synced && S.user === u) { delete DB[u]; STORE.set('chess3d-accounts', JSON.stringify(DB)); kickOut('Your account was removed by the operator'); return; }
+      if (pushTimer) return;
+      if (typeof t !== 'number' || !a || t <= (a.updated || 0) || S.user !== u) return;
       const full = await cloudGet(u); if (!full || S.user !== u || pushTimer) return;
       DB[u] = keepAv(normAcct(full), a);
       STORE.set('chess3d-accounts', JSON.stringify(DB));
@@ -4588,7 +4600,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
   };
 
   /* ---------- toast + prompt (usable before the 3D game is loaded) ---------- */
-  window.toast = function (msg, icon = 'fa-circle-info') {
+  window.toast = function (msg, icon = 'fa-circle-info', ms = 2200) {
     const box = $('toast-box'); if (!box) return;
     while (box.children.length >= 3) box.removeChild(box.firstChild);
     const el = document.createElement('div');
@@ -4597,7 +4609,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
     const sp = document.createElement('span'); sp.textContent = msg;
     el.append(i, sp); box.appendChild(el);
     requestAnimationFrame(() => el.classList.add('show'));
-    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 2200);
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, ms);
   };
   let promptCb = null;
   window.PROMPT = {
@@ -4692,6 +4704,12 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
       } else if (cloud === undefined && !account) {
         throw new Error('Cannot reach the account server. Check your internet and try again.');
       }
+      if (action !== 'change-password') {
+        const cfg = await getConfig();
+        if (cfg.maintenance) throw new Error(cfg.message || 'ROOKMATE is under maintenance. Try again later.');
+        const ban = await checkBan(username);
+        if (ban) throw new Error('This account is banned' + (ban.reason ? ': ' + ban.reason : '') + '.');
+      }
     }
     if (action === 'register') {
       if (account && account.salt && account.hash) throw new Error('This username is already registered on this browser. Choose Log In.');
@@ -4744,7 +4762,7 @@ vec3 crateAlbedo(vec2 uv, float id, float fw){
     $('auth').classList.add('hidden'); $('home').classList.remove('hidden');
     const a = me(); pick = cleanAv(a.av); syncPickers();
     renderHome(); setTab('menu'); startNet();
-    toast('Welcome, ' + u + '!', 'fa-hand');
+    toast('Welcome, ' + u + '!', 'fa-hand'); showAnnouncement();
   }
   function logout() {
     stopNet();
