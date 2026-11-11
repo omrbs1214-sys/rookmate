@@ -8,6 +8,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <script>window.__MOB=(matchMedia("(pointer:coarse)").matches||Math.min(screen.width,screen.height)<820);window.__AN=window.__MOB?4:16;
+  /* ---- phone fit: lay the page out like a laptop window, then let the WebView scale it to the screen ---- */
+  window.__DESIGN_H=720; window.__MIN_W=1200;   /* smaller __DESIGN_H = bigger UI, larger = smaller UI */
+  window.__fitViewport=function(){
+    if(!window.__MOB) return;
+    var m=document.querySelector('meta[name=viewport]'); if(!m) return;
+    var w=screen.width,h=screen.height;
+    if(w>h){var vw=Math.round(Math.max(window.__MIN_W,window.__DESIGN_H*w/h));
+      m.setAttribute('content','width='+vw+', maximum-scale=1, user-scalable=no, viewport-fit=cover');}
+    else{m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');}
+  };
+  window.__fitViewport();
+  window.addEventListener('orientationchange',function(){setTimeout(window.__fitViewport,250)});
+  if(screen.orientation&&screen.orientation.addEventListener)screen.orientation.addEventListener('change',function(){setTimeout(window.__fitViewport,250)});
   /* ---- TURN (needed so phone<->browser challenges connect across different networks) ----
      Paste your Metered credentials URL between the quotes, e.g.
      'https://YOURAPP.metered.live/api/v1/turn/credentials?apiKey=YOURKEY'  (see steps from Claude) */
