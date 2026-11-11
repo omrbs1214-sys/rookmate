@@ -16,7 +16,21 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: npm install
+      - name: Bundle libraries locally
+        run: node tools/prep.js libs
+      - name: Compile Tailwind CSS
+        run: npx tailwindcss -c tailwind.config.js -i tools/tw-in.css -o www/tw.css --minify
+      - name: Rewrite index.html to local files
+        run: node tools/prep.js html
       - run: npx cap add android
+      - name: Landscape-only and fullscreen
+        run: |
+          sed -i '0,/<activity/s//<activity android:screenOrientation="sensorLandscape"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's|<item name="windowNoTitle">true</item>|<item name="windowNoTitle">true</item>\n        <item name="android:windowFullscreen">true</item>|' android/app/src/main/res/values/styles.xml
+          grep -n "screenOrientation" android/app/src/main/AndroidManifest.xml || echo "WARN: orientation not set"
+          grep -n "windowFullscreen" android/app/src/main/res/values/styles.xml || echo "WARN: fullscreen not set"
+      - name: App icon from logo
+        run: node tools/icon.js
       - run: npx cap sync android
       - run: |
           cd android
